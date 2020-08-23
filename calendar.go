@@ -1,13 +1,25 @@
 package main
 
-type Weekday string
+import (
+	"encoding/csv"
+	"time"
+)
+
+type Weekday int
 
 const (
-	SUN  = Weekday("sunday")
-	MON  = Weekday("monday")
-	TUES = Weekday("tuesday")
-	WED  = Weekday("wednesday")
-	THUR = Weekday("thursday")
-	FRI  = Weekday("friday")
-	SAT  = Weekday("saturday")
+	SUN = Weekday(iota)
+	MON
+	TUES
+	WED
+	THUR
+	FRI
+	SAT
 )
+
+type GeneralEvents struct {
+	Name      string `csv:"Name"`
+	Day       string `csv:"Day"`
+	Hours     string `csv:"Hours"`
+	datetimes []time.Time
+}
