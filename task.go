@@ -15,9 +15,6 @@ type Task struct {
 	// ex 15:00 both Tue, Thur
 	Deadline       string
 	EstimatedHours int
-	Urgency        float32
-	HoursLeft      int
-	BusyHours      int
 }
 
 func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
@@ -71,6 +68,9 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 	wraps := 0
 	for index := 0; ; index++ {
 		if index == len(blockedHours) {
+			if index == 0 {
+				break
+			}
 			index = 0
 			wraps += 1
 		}
@@ -86,6 +86,11 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 	}
 	fmt.Println("")
 	return remainingFreeHours
+}
+
+func (t *Task) getUrgency(now time.Time, genEvents []*GeneralEvent) float32 {
+	hoursLeft := t.getHoursLeft(now, getNextBlockedHours(now, genEvents))
+	return float32(t.EstimatedHours) / float32(hoursLeft)
 }
 
 func (t *Task) parseRepeatingDays() (hour int, weekRotation rotation, days []time.Weekday) {

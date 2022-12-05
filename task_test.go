@@ -96,17 +96,8 @@ func TestTasksReturnedHours(t *testing.T) {
 		EstimatedHours: 1,
 	}
 	times := generateTestingTimes()
+	bookReport1, bookReport2 := createTwoTasks()
 
-	bookReport1 := &Task{
-		Name: "Finish first book report for class",
-		Deadline: "16:00 11/28/2022 EST",
-		EstimatedHours: 1,
-	}
-	bookReport2 := &Task{
-		Name: "Finish second book report for class",
-		Deadline: "16:00 12/28/2022 EST",
-		EstimatedHours: 1,
-	}
 	sleepEvent := &GeneralEvent{
 		Name:      "sleeping",
 		Rotation:  "both",
@@ -166,7 +157,40 @@ func TestTasksReturnedHours(t *testing.T) {
 	}
 }
 
-// check that tasks in the past return something useful
+func TestTaskUrgency(t *testing.T) {
+	bookClub := &Task{
+		Name: "book club",
+		Deadline: "08:00 11/27/2022 EST",
+		EstimatedHours: 24,
+	}
+	mid := generateTestingTimes()["mid"]
+	urgency := bookClub.getUrgency(mid, []*GeneralEvent{})
+	if urgency != 2.4 {
+		t.Errorf("Expected urgency of %f, got %f\n", 2.4, urgency)
+	}
+
+	late := generateTestingTimes()["late"]
+	urgency = bookClub.getUrgency(late, []*GeneralEvent{})
+	if urgency >=0 {
+		t.Errorf("Expected urgency of less than zero, got %f\n", urgency)
+	}
+
+
+}
+
+func createTwoTasks() (*Task, *Task) {
+		bookReport1 := &Task{
+		Name: "Finish first book report for class",
+		Deadline: "16:00 11/28/2022 EST",
+		EstimatedHours: 1,
+	}
+	bookReport2 := &Task{
+		Name: "Finish second book report for class",
+		Deadline: "16:00 12/28/2022 EST",
+		EstimatedHours: 1,
+	}
+	return bookReport1, bookReport2
+}
 
 func compareWeekdayArr(arr1, arr2 []time.Weekday) bool {
 	if len(arr1) != len(arr2) {
