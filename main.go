@@ -15,10 +15,16 @@ func main() {
 		Duration:  8,
 	}
 	fmt.Println(getNextBlockedHours(time.Now(), []*GeneralEvent{sleep}))
+
+	// blockedEvents, tasks := readFromFile()
 }
 
 // run as web server
 // read/write events to json file
+// func readFromFile() ([]*GeneralEvent, []*Task) {
+
+// }
+
 // read/write blocked days to json file
 // change blocked hours to 2 weekly schedule instead of weekly schedule (primary, secondary week)
 // when serving, calculate urgency of task or tasks and return

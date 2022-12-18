@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ type Task struct {
 	// ex 15:00 both Tue, Thur
 	Deadline       string
 	EstimatedHours int
+	Urgency        float32
 }
 
 func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
@@ -88,9 +90,9 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 	return remainingFreeHours
 }
 
-func (t *Task) getUrgency(now time.Time, genEvents []*GeneralEvent) float32 {
+func (t *Task) calculateUrgency(now time.Time, genEvents []*GeneralEvent) {
 	hoursLeft := t.getHoursLeft(now, getNextBlockedHours(now, genEvents))
-	return float32(t.EstimatedHours) / float32(hoursLeft)
+	t.Urgency = float32(t.EstimatedHours) / float32(hoursLeft)
 }
 
 func (t *Task) parseRepeatingDays() (hour int, weekRotation rotation, days []time.Weekday) {
@@ -108,6 +110,25 @@ func (t *Task) parseRepeatingDays() (hour int, weekRotation rotation, days []tim
 		fmt.Println(err.Error())
 	}
 	return
+}
+
+func sortTasks(tasks []*Task, now time.Time, genEvents []*GeneralEvent) {
+	for _, task := range tasks {
+		task.calculateUrgency(now, genEvents)
+	}
+	sort.Sort(byUrgency(tasks))
+}
+
+type byUrgency []*Task
+
+func (t byUrgency) Len() int {
+	return len(t)
+}
+func (t byUrgency) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+func (t byUrgency) Less(i, j int) bool {
+	return t[i].Urgency > t[j].Urgency
 }
 
 /*

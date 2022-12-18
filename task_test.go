@@ -107,32 +107,32 @@ func TestTasksReturnedHours(t *testing.T) {
 	}
 
 	tests := []struct {
-		title string
-		task *Task
+		title               string
+		task                *Task
 		remainingHoursEarly int
-		remainingHoursMid int
-		remainingHoursLate int
+		remainingHoursMid   int
+		remainingHoursLate  int
 	}{
 		{
-			title: "Repeating task uses correct instance of task to generate correct hours",
-			task: bookClub,
+			title:               "Repeating task uses correct instance of task to generate correct hours",
+			task:                bookClub,
 			remainingHoursEarly: 41,
-			remainingHoursMid: 43,
-			remainingHoursLate: 68,
+			remainingHoursMid:   43,
+			remainingHoursLate:  68,
 		},
 		{
-			title: "Upcoming task generates correct hours, even when in the past",
-			task: bookReport1,
+			title:               "Upcoming task generates correct hours, even when in the past",
+			task:                bookReport1,
 			remainingHoursEarly: 136,
-			remainingHoursMid: 26,
-			remainingHoursLate: -93,
+			remainingHoursMid:   26,
+			remainingHoursLate:  -93,
 		},
 		{
-			title: "Far out task generates correct hours, even when far in the future with multiple intervening fortnights",
-			task: bookReport2,
+			title:               "Far out task generates correct hours, even when far in the future with multiple intervening fortnights",
+			task:                bookReport2,
 			remainingHoursEarly: 616,
-			remainingHoursMid: 506,
-			remainingHoursLate: 419,
+			remainingHoursMid:   506,
+			remainingHoursLate:  419,
 		},
 	}
 	for _, test := range tests {
@@ -159,34 +159,49 @@ func TestTasksReturnedHours(t *testing.T) {
 
 func TestTaskUrgency(t *testing.T) {
 	bookClub := &Task{
-		Name: "book club",
-		Deadline: "08:00 11/27/2022 EST",
+		Name:           "book club",
+		Deadline:       "08:00 11/27/2022 EST",
 		EstimatedHours: 24,
 	}
+	report1, report2 := createTwoTasks()
+	taskList := []*Task{bookClub, report1, report2}
 	mid := generateTestingTimes()["mid"]
-	urgency := bookClub.getUrgency(mid, []*GeneralEvent{})
-	if urgency != 2.4 {
-		t.Errorf("Expected urgency of %f, got %f\n", 2.4, urgency)
+	sortTasks(taskList, mid, []*GeneralEvent{})
+	if bookClub.Urgency != 2.4 {
+		t.Errorf("Expected urgency of %f, got %f\n", 2.4, bookClub.Urgency)
+	}
+	// test sorted order
+	if taskList[0] != bookClub || taskList[1] != report1 || taskList[2] != report2 {
+		t.Errorf("Task list out of order for mid time:\n%v: %f\n%v: %f\n%v: %f\n",
+			taskList[0].Name, taskList[0].Urgency,
+			taskList[1].Name, taskList[1].Urgency,
+			taskList[2].Name, taskList[2].Urgency)
 	}
 
 	late := generateTestingTimes()["late"]
-	urgency = bookClub.getUrgency(late, []*GeneralEvent{})
-	if urgency >=0 {
-		t.Errorf("Expected urgency of less than zero, got %f\n", urgency)
+	sortTasks(taskList, late, []*GeneralEvent{})
+	if bookClub.Urgency >= 0 {
+		t.Errorf("Expected urgency of less than zero, got %f\n", bookClub.Urgency)
 	}
 
-
+	// test sorted order
+	if taskList[0] != report2 || taskList[1] != report1 || taskList[2] != bookClub {
+		t.Errorf("Task list out of order for late time:\n%v: %f\n%v: %f\n%v: %f\n",
+			taskList[0].Name, taskList[0].Urgency,
+			taskList[1].Name, taskList[1].Urgency,
+			taskList[2].Name, taskList[2].Urgency)
+	}
 }
 
 func createTwoTasks() (*Task, *Task) {
-		bookReport1 := &Task{
-		Name: "Finish first book report for class",
-		Deadline: "16:00 11/28/2022 EST",
+	bookReport1 := &Task{
+		Name:           "Finish first book report for class",
+		Deadline:       "16:00 11/28/2022 EST",
 		EstimatedHours: 1,
 	}
 	bookReport2 := &Task{
-		Name: "Finish second book report for class",
-		Deadline: "16:00 12/28/2022 EST",
+		Name:           "Finish second book report for class",
+		Deadline:       "16:00 12/28/2022 EST",
 		EstimatedHours: 1,
 	}
 	return bookReport1, bookReport2
