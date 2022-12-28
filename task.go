@@ -11,7 +11,7 @@ import (
 type Task struct {
 	Name string
 	// either a specific date with correct format or range of weekdays for repeating events
-	// ex 15:00 01/02/2006
+	// ex 15:00 01/02/2006 EST
 	// ex 15:00 first Monday
 	// ex 15:00 both Tue, Thur
 	Deadline       string
