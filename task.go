@@ -131,6 +131,31 @@ func (t byUrgency) Less(i, j int) bool {
 	return t[i].Urgency > t[j].Urgency
 }
 
+func (t byUrgency) String() string {
+	outStr := ""
+	topFive := []*Task{}
+	finished := []*Task{}
+	deadlinePassed := []*Task{}
+	for index, task := range t {
+		if index < 5 && task.Urgency > 0 {
+			topFive = append(topFive, task)
+		}
+		if task.Urgency == 0 {
+			finished = append(finished, task)
+		}
+		if task.Urgency < 0 {
+			deadlinePassed = append(deadlinePassed, task)
+		}
+	}
+	if len(topFive) != 0 {
+		outStr = "- Most Urgent Tasks\n"
+		for _, task := range topFive {
+			outStr += fmt.Sprintf("	- %s: %.2f%% urgent\n", task.Name, task.Urgency * 100)
+		}
+	}
+	return outStr
+}
+
 /*
 config file will have file names for the following:
 a list of events corresponding to a normal calendar week,

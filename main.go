@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	tasksFile      = "To Do List.md"
-	sortedListFile = ""
+	tasksFile      = "Task List.md"
+	sortedListFile = "Top Priorities.md"
 )
 
 var ourEvents []*GeneralEvent
@@ -24,7 +24,7 @@ func main() {
 	fmt.Println(ourTasks)
 	sortTasks(ourTasks, time.Now(), ourEvents)
 
-	fmt.Println(ourTasks)
+	fmt.Println(byUrgency(ourTasks))
 	for _, task := range ourTasks {
 		fmt.Println(task.Name)
 	}
