@@ -36,9 +36,7 @@ func main() {
 	fmt.Println(ourEvents)
 	fmt.Println(ourTasks)
 	sortTasks(ourTasks, time.Now(), ourEvents)
-
-	fmt.Println(outputTasks(ourTasks))
-	fmt.Println(outputEvents(ourEvents))
+	writeToFile(ourEvents, ourTasks)
 
 }
 
@@ -64,6 +62,20 @@ func readFromFile() ([]*GeneralEvent, []*Task) {
 
 	}
 	return mdToStructs(lines)
+}
+
+func writeToFile(events []*GeneralEvent, tasks []*Task) {
+	dir := os.Getenv("NOTESDIR")
+	if dir == "" {
+		fmt.Println("Don't forget to set NOTESDIR")
+	}
+	w, err := os.Open(dir + "/" + tasksFile)
+	defer w.Close()
+	if err != nil {
+		fmt.Println(err)
+	}
+	w.WriteString(outputTasks(tasks))
+	w.WriteString(outputEvents(events))
 }
 
 func organizeLines(rawLine string) (string, int) {
