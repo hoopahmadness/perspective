@@ -12,6 +12,7 @@ import (
 var primeSunday = getPrimeSunday()
 var primeDateFmt = "Mon 01/02 2006 MST"
 var taskDateFmt = "15:00 01/02/2006 MST"
+var updateLineFmt = "15:04 01/02/2006 MST"
 
 // function used to set the global variable PrimeSunday, which is one of two literature values used to define
 // which sundays are prime (as opposed to being second sundays)
@@ -71,45 +72,37 @@ func nextHourBlock(now time.Time) int {
 	return primeDiffHours % fullTwoWeeks
 }
 
-// func parseTimeStrings(input string) ([]time.Duration, error) { //whole hour steps only, for now
-// 	hoursList := []time.Duration{}
-// 	tokens := strings.Split(input, ",")
-// 	for _, phrase := range tokens {
-// 		phrase = strings.Trim(phrase, " ")
-// 		hours := strings.Split(phrase, "-")
-// 		if len(hours) == 1 { //this is a single listed hour
-// 			hour, err := strconv.Atoi(hours[0])
-// 			if err != nil {
-// 				return hoursList, err
-// 			}
-// 			hoursList = append(hoursList, time.Duration(hour)*time.Hour)
-// 		} else if len(hours) == 2 { //this is a range of hours
-// 			firstHour, err := strconv.Atoi(hours[0])
-// 			if err != nil {
-// 				return hoursList, err
-// 			}
-// 			hoursList = append(hoursList, time.Duration(firstHour)*time.Hour)
-// 			lastHour, err := strconv.Atoi(hours[1])
-// 			if err != nil {
-// 				return hoursList, err
-// 			}
-// 			if lastHour < firstHour { //temporarily "un" wrap the day
-// 				lastHour = lastHour + 24
-// 			}
-// 			//iterate over loop to fill in ranges
-// 			for middleHour := firstHour + 1; middleHour < lastHour; middleHour++ {
-// 				if middleHour == 24 { //wrap
-// 					middleHour = 0
-// 					lastHour = lastHour - 24
-// 				}
-// 				hoursList = append(hoursList, time.Duration(middleHour)*time.Hour)
-// 			}
-// 			hoursList = append(hoursList, time.Duration(lastHour)*time.Hour)
+// function that takes a time and generates a string representation of what day and rotation
+// that time corresponds to.
+func whatDayIsIt(now time.Time) string {
+	hourBlock := nextHourBlock(now)
+	rotation := "first"
+	weekday := ""
+	if hourBlock >= 168 {
+		rotation = "second"
+		hourBlock -= 168
+	}
+	switch  {
+	case hourBlock >= 144:
+		weekday = "Saturday"
+	case hourBlock >= 120:
+		weekday = "Friday"
+	case hourBlock >= 96:
+		weekday = "Thursday"
+	case hourBlock >= 72:
+		weekday = "Wednesday"
+	case hourBlock >= 48:
+		weekday = "Tuesday"
+	case hourBlock >= 24:
+		weekday = "Monday"
+	case hourBlock >= 0:
+		weekday = "Sunday"
+	default:
+		fmt.Println("Got a bad hourblock")
+	}
 
-// 		}
-// 	}
-// 	return hoursList, nil
-// }
+	return fmt.Sprintf("%s %s", rotation, weekday)
+}
 
 func parseDayStrings(input string) ([]time.Weekday, error) {
 	dayList := []time.Weekday{}

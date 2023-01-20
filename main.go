@@ -69,11 +69,12 @@ func writeToFile(events []*GeneralEvent, tasks []*Task) {
 	if dir == "" {
 		fmt.Println("Don't forget to set NOTESDIR")
 	}
-	w, err := os.Open(dir + "/" + tasksFile)
+	w, err := os.Create(dir + "/" + tasksFile)
 	defer w.Close()
 	if err != nil {
 		fmt.Println(err)
 	}
+	w.WriteString(fmt.Sprintf("Updated at %s: %s", time.Now().Format(updateLineFmt), whatDayIsIt(time.Now())))
 	w.WriteString(outputTasks(tasks))
 	w.WriteString(outputEvents(events))
 }
