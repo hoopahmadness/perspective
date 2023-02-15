@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -24,28 +25,50 @@ const (
 	genTextFmt    = "\n\t\t- *%s*"
 )
 
-var ourEvents []*GeneralEvent
-var ourTasks []*Task
 var genTextMatcher *regexp.Regexp
 
 func main() {
 
 	genTextMatcher, _ = regexp.Compile(`\t{2}- \*(.+)\*`)
 
-	ourEvents, ourTasks = readFromFile()
-	fmt.Println(ourEvents)
-	fmt.Println(ourTasks)
+	quitChan := make(chan bool)
+
+	// get api password from arguments
+
+	// define handlers
+	// quit
+	// mostUrgent
+
+	// thread for hourly updates
+	go func() {
+		for {
+			fmt.Println("Updating task list")
+			refreshList()
+			time.Sleep(1 * time.Hour)
+		}
+	}()
+
+	// run server
+	<-quitChan
+}
+
+func refreshList() {
+	ourEvents, ourTasks, err := readFromFile()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	sortTasks(ourTasks, time.Now(), ourEvents)
 	writeToFile(ourEvents, ourTasks)
 
 }
 
-// run as web server
 // read/write events to md file
-func readFromFile() ([]*GeneralEvent, []*Task) {
+func readFromFile() ([]*GeneralEvent, []*Task, error) {
 	dir := os.Getenv("NOTESDIR")
 	if dir == "" {
 		fmt.Println("Don't forget to set NOTESDIR")
+		dir = "~/Documents/Logseq/personal/pages"
 	}
 	// pull in tasks file
 	readFile, err := os.Open(dir + "/" + tasksFile)
@@ -59,9 +82,12 @@ func readFromFile() ([]*GeneralEvent, []*Task) {
 	for fileScanner.Scan() {
 		line := fileScanner.Text()
 		lines = append(lines, line)
-
 	}
-	return mdToStructs(lines)
+	if len(lines) < 3 {
+		return []*GeneralEvent{}, []*Task{}, errors.New("Tried the default notes directory but no dice")
+	}
+	ev, ta := mdToStructs(lines)
+	return ev, ta, nil
 }
 
 func writeToFile(events []*GeneralEvent, tasks []*Task) {
@@ -87,7 +113,6 @@ func organizeLines(rawLine string) (string, int) {
 // read/write blocked days to json file
 // change blocked hours to 2 weekly schedule instead of weekly schedule (primary, secondary week)
 // when serving, calculate urgency of task or tasks and return
-// every hour write out human readable list of most urgent tasks with date and time (for async devices)
 
 func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 	events := []*GeneralEvent{}
@@ -135,10 +160,10 @@ func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
-		fmt.Printf("Tasks - line # %d says %s, offset is %d, previousOffset is %d \n", index, line, offset, previousOffset)
+		// fmt.Printf("Tasks - line # %d says %s, offset is %d, previousOffset is %d \n", index, line, offset, previousOffset)
 		switch {
 		case previousOffset == -1 || offset < previousOffset:
-			fmt.Println("Adding Name")
+			// fmt.Println("Adding Name")
 			newTask = &Task{
 				Name: line,
 			}
@@ -147,18 +172,18 @@ func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
 			tokens := strings.Split(line, "; ")
 			switch tokens[0] {
 			case "Deadline":
-				fmt.Printf("Adding Deadline: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Deadline: '%s'\n", tokens[1])
 				newTask.Deadline = tokens[1]
 			case "Estimated Hours":
-				fmt.Printf("Adding Estimated Hours: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Estimated Hours: '%s'\n", tokens[1])
 				num, err := strconv.Atoi(tokens[1])
 				if err != nil {
 					fmt.Println(err)
 				}
 				newTask.EstimatedHours = num
 			default:
-				fmt.Println("Whoopsie!")
-				fmt.Println(tokens[0])
+				// fmt.Println("Whoopsie!")
+				// fmt.Println(tokens[0])
 			}
 		}
 		newTask.AddRaw(rawLines[index])
@@ -176,10 +201,10 @@ func mdToEvents(rawLines []string, lines []string, offsets []int) []*GeneralEven
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
-		fmt.Printf("Events - line # %d says %s, offset is %d, previousOffset is %d \n", index, line, offset, previousOffset)
+		// fmt.Printf("Events - line # %d says %s, offset is %d, previousOffset is %d \n", index, line, offset, previousOffset)
 		switch {
 		case previousOffset == -1 || offset < previousOffset:
-			fmt.Println("Adding Name")
+			// fmt.Println("Adding Name")
 			newEvent = &GeneralEvent{
 				Name: line,
 			}
@@ -188,35 +213,35 @@ func mdToEvents(rawLines []string, lines []string, offsets []int) []*GeneralEven
 			tokens := strings.Split(line, "; ")
 			switch tokens[0] {
 			case "Rotation":
-				fmt.Printf("Adding Rotation: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Rotation: '%s'\n", tokens[1])
 				newEvent.Rotation = rotation(tokens[1])
 			case "Days":
-				fmt.Printf("Adding Days: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Days: '%s'\n", tokens[1])
 				newEvent.Days = tokens[1]
 			case "Start Time":
-				fmt.Printf("Adding Start Time: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Start Time: '%s'\n", tokens[1])
 				num, err := strconv.Atoi(tokens[1])
 				if err != nil {
 					fmt.Println(err)
 				}
 				newEvent.StartTime = num
 			case "Duration":
-				fmt.Printf("Adding Duration: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Duration: '%s'\n", tokens[1])
 				num, err := strconv.Atoi(tokens[1])
 				if err != nil {
 					fmt.Println(err)
 				}
 				newEvent.Duration = num
 			case "Inactive":
-				fmt.Printf("Adding Inactivity: '%s'\n", tokens[1])
+				// fmt.Printf("Adding Inactivity: '%s'\n", tokens[1])
 				ans, err := strconv.ParseBool(tokens[1])
 				if err != nil {
 					fmt.Println(err)
 				}
 				newEvent.Inactive = ans
 			default:
-				fmt.Println("Whoopsie!")
-				fmt.Println(tokens[0])
+				// fmt.Println("Whoopsie!")
+				// fmt.Println(tokens[0])
 			}
 		}
 		newEvent.AddRaw(rawLines[index])

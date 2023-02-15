@@ -56,26 +56,26 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 	deadlineHourBlock := 0
 	interveningFortnites := 0
 	nowHourBlock := nextHourBlock(now)
-	fmt.Printf("NOW is hour %d\n", nowHourBlock)
+	// fmt.Printf("NOW is hour %d\n", nowHourBlock)
 	// try to parse Deadline into time
 	deadline, err := time.Parse(taskDateFmt, t.Deadline)
 
 	if err == nil { // this is a single dated task
-		fmt.Println("This is a single dated task")
+		// fmt.Println("This is a single dated task")
 		for {
 			earlyDeadline := deadline.Add(-1 * time.Hour * fullTwoWeeks)
 			if getZeroSunday(now).After(earlyDeadline) { // We should be comparing deadline to the beginning of the two week rotation, not the day itself!
-				fmt.Println("We went back too far")
+				// fmt.Println("We went back too far")
 				break
 			}
 			interveningFortnites++
-			fmt.Printf("Fortnights: %d\n", interveningFortnites)
-			fmt.Printf("early deadline: %v \n now: %v\n", earlyDeadline, now)
+			// fmt.Printf("Fortnights: %d\n", interveningFortnites)
+			// fmt.Printf("early deadline: %v \n now: %v\n", earlyDeadline, now)
 			deadline = earlyDeadline
 		}
 		deadlineHourBlock = nextHourBlock(deadline)
 	} else { // this is a repeating task, we need to find the next instance of this deadline
-		fmt.Println("This is a repeating task")
+		// fmt.Println("This is a repeating task")
 		deadlineHour, weekRotation, days := t.parseRepeatingDays()
 		hours := generateBlockedHours(days, weekRotation, deadlineHour, 1)
 		wrap := 0
@@ -83,10 +83,10 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 			if index == len(hours) {
 				index = 0
 				wrap = 1
-				fmt.Println("wrapping")
+				// fmt.Println("wrapping")
 			}
 			hour := hours[index] + (wrap * fullTwoWeeks)
-			fmt.Printf("we're comparing hour %d to nowHourBlock %d\n", hour, nowHourBlock)
+			// fmt.Printf("we're comparing hour %d to nowHourBlock %d\n", hour, nowHourBlock)
 			if hour > nowHourBlock {
 				deadlineHourBlock = hour
 				break
@@ -94,11 +94,11 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 		}
 	}
 	// now we have a deadline hour block but it's normalized to this rotation; let's un-normalize it
-	fmt.Printf("Deadline hour is %d\n", deadlineHourBlock)
+	// fmt.Printf("Deadline hour is %d\n", deadlineHourBlock)
 	deadlineHourBlock += interveningFortnites * fullTwoWeeks
 
 	remainingFreeHours := deadlineHourBlock - nowHourBlock
-	fmt.Printf("remaining = %d - %d = %d\n", deadlineHourBlock, nowHourBlock, remainingFreeHours)
+	// fmt.Printf("remaining = %d - %d = %d\n", deadlineHourBlock, nowHourBlock, remainingFreeHours)
 
 	wraps := 0
 	for index := 0; ; index++ {
@@ -120,7 +120,7 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 		t.BusyHours += 1
 		// fmt.Printf("Hour %d (%d) is blocked, remainingFreeHours is %d \n", blockedHours[index], eventHourBlock, remainingFreeHours)
 	}
-	fmt.Println("")
+	// fmt.Println("")
 	t.RemainingHours = remainingFreeHours
 	return remainingFreeHours
 }
