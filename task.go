@@ -9,14 +9,47 @@ import (
 )
 
 type Task struct {
+	// Friendly name for the task.
 	Name string
 	// either a specific date with correct format or range of weekdays for repeating events
 	// ex 15:00 01/02/2006 EST
 	// ex 15:00 first Monday
 	// ex 15:00 both Tue, Thur
-	Deadline       string
+	Deadline string
+	// The amount of time you estimate that this task will take to complete.
+	// This can be changed as progress is made in a task or at any other time your estimate changes
+	// Setting this to zero signals the task is complete
 	EstimatedHours int
 	Urgency        float32
+	RemainingHours int
+	BusyHours      int
+	Raw            string
+}
+
+func (t *Task) AddRaw(line string) {
+	if t == nil {
+		return
+	}
+	if genTextMatcher.MatchString(line) {
+		return
+	}
+	t.Raw += "\n" + line
+}
+
+func (t *Task) PrintRaw() string {
+	if t == nil {
+		return ""
+	}
+	out := t.Raw
+	// add in generated text: urgency, hours remaining, hours blocked
+	out += fmt.Sprintf(genTextFmt, fmt.Sprintf("Urgency; %.2f%%", t.Urgency*100))
+	out += fmt.Sprintf(genTextFmt, fmt.Sprintf("Free Time Left; %d", t.RemainingHours))
+	out += fmt.Sprintf(genTextFmt, fmt.Sprintf("Blocked Hours; %d", t.BusyHours))
+	return out
+}
+
+func (t *Task) String() string {
+	return t.PrintRaw()
 }
 
 func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
@@ -84,9 +117,11 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 			break
 		}
 		remainingFreeHours += -1
+		t.BusyHours += 1
 		// fmt.Printf("Hour %d (%d) is blocked, remainingFreeHours is %d \n", blockedHours[index], eventHourBlock, remainingFreeHours)
 	}
 	fmt.Println("")
+	t.RemainingHours = remainingFreeHours
 	return remainingFreeHours
 }
 
@@ -131,14 +166,14 @@ func (t byUrgency) Less(i, j int) bool {
 	return t[i].Urgency > t[j].Urgency
 }
 
-func (t byUrgency) String() string {
+func outputTasks(taskList []*Task) string {
 	outStr := ""
-	topFive := []*Task{}
+	upcoming := []*Task{}
 	finished := []*Task{}
 	deadlinePassed := []*Task{}
-	for index, task := range t {
-		if index < 5 && task.Urgency > 0 {
-			topFive = append(topFive, task)
+	for _, task := range taskList {
+		if task.Urgency > 0 {
+			upcoming = append(upcoming, task)
 		}
 		if task.Urgency == 0 {
 			finished = append(finished, task)
@@ -147,14 +182,64 @@ func (t byUrgency) String() string {
 			deadlinePassed = append(deadlinePassed, task)
 		}
 	}
-	if len(topFive) != 0 {
-		outStr = "- Most Urgent Tasks\n"
-		for _, task := range topFive {
-			outStr += fmt.Sprintf("	- %s: %.2f%% urgent\n", task.Name, task.Urgency * 100)
+	if len(deadlinePassed) != 0 {
+		outStr += fmt.Sprintf(headerLineFmt, overdueTasks)
+		for _, task := range deadlinePassed {
+			outStr += task.PrintRaw()
 		}
 	}
+	if len(upcoming) != 0 {
+		outStr += fmt.Sprintf(headerLineFmt, upcomingTasks)
+		for _, task := range upcoming {
+			outStr += task.PrintRaw()
+		}
+	}
+	if len(finished) != 0 {
+		outStr += fmt.Sprintf(headerLineFmt, completedTasks)
+		for _, task := range finished {
+			outStr += task.PrintRaw()
+		}
+	}
+	outStr = strings.Replace(outStr, "\n\n", "\n", -1)
 	return outStr
 }
+
+// func (t byUrgency) String() string {
+// 	outStr := ""
+// 	topFive := []*Task{}
+// 	finished := []*Task{}
+// 	deadlinePassed := []*Task{}
+// 	for index, task := range t {
+// 		if index < 5 && task.Urgency > 0 {
+// 			topFive = append(topFive, task)
+// 		}
+// 		if task.Urgency == 0 {
+// 			finished = append(finished, task)
+// 		}
+// 		if task.Urgency < 0 {
+// 			deadlinePassed = append(deadlinePassed, task)
+// 		}
+// 	}
+// 	if len(topFive) != 0 {
+// 		outStr = "- Most Urgent Tasks\n"
+// 		for _, task := range topFive {
+// 			outStr += fmt.Sprintf("	- %s:\t\t%.2f%% urgent\n", task.Name, task.Urgency*100)
+// 		}
+// 	}
+// 	if len(deadlinePassed) != 0 {
+// 		outStr += "- Overdue Tasks\n"
+// 		for _, task := range deadlinePassed {
+// 			outStr += fmt.Sprintf("	- %s:\t\t%s\n", task.Name, task.Deadline)
+// 		}
+// 	}
+// 	if len(finished) != 0 {
+// 		outStr += "- Finished Tasks\n"
+// 		for _, task := range finished {
+// 			outStr += fmt.Sprintf("	- %s\n", task.Name)
+// 		}
+// 	}
+// 	return outStr
+// }
 
 /*
 config file will have file names for the following:

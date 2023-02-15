@@ -4,30 +4,39 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	tasksFile      = "Task List.md"
-	sortedListFile = "Top Priorities.md"
+	tasksFile = "To Do List.md"
+
+	overdueTasks    = "Overdue Tasks"
+	upcomingTasks   = "Upcoming Tasks"
+	completedTasks  = "Completed Tasks"
+	repeatingEvents = "Regular Events"
+	inactiveEvents  = "Inactive Events"
+	backgroundStuff = "Background Perspective Stuff"
+
+	headerLineFmt = "\n- %s\n"
+	genTextFmt    = "\n\t\t- *%s*"
 )
 
 var ourEvents []*GeneralEvent
 var ourTasks []*Task
+var genTextMatcher *regexp.Regexp
 
 func main() {
+
+	genTextMatcher, _ = regexp.Compile(`\t{2}- \*(.+)\*`)
 
 	ourEvents, ourTasks = readFromFile()
 	fmt.Println(ourEvents)
 	fmt.Println(ourTasks)
 	sortTasks(ourTasks, time.Now(), ourEvents)
-
-	fmt.Println(byUrgency(ourTasks))
-	for _, task := range ourTasks {
-		fmt.Println(task.Name)
-	}
+	writeToFile(ourEvents, ourTasks)
 
 }
 
@@ -49,11 +58,25 @@ func readFromFile() ([]*GeneralEvent, []*Task) {
 	lines := []string{}
 	for fileScanner.Scan() {
 		line := fileScanner.Text()
-		if strings.Contains(line, "-") {
-			lines = append(lines, line)
-		}
+		lines = append(lines, line)
+
 	}
 	return mdToStructs(lines)
+}
+
+func writeToFile(events []*GeneralEvent, tasks []*Task) {
+	dir := os.Getenv("NOTESDIR")
+	if dir == "" {
+		fmt.Println("Don't forget to set NOTESDIR")
+	}
+	w, err := os.Create(dir + "/" + tasksFile)
+	defer w.Close()
+	if err != nil {
+		fmt.Println(err)
+	}
+	w.WriteString(fmt.Sprintf("Updated at %s: %s", time.Now().Format(updateLineFmt), whatDayIsIt(time.Now())))
+	w.WriteString(outputTasks(tasks))
+	w.WriteString(outputEvents(events))
 }
 
 func organizeLines(rawLine string) (string, int) {
@@ -71,6 +94,7 @@ func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 	tasks := []*Task{}
 	offsets := []int{}
 	lines := []string{}
+	rawLines = append(rawLines, "\n")
 	for _, raw := range rawLines {
 		line, offset := organizeLines(raw)
 		lines = append(lines, line)
@@ -79,7 +103,7 @@ func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 	for ind := 0; ind < len(lines); {
 		line := lines[ind]
 		offset := offsets[ind]
-		if line == "Tasks" || line == "Events" {
+		if line == upcomingTasks || line == overdueTasks || line == completedTasks || line == repeatingEvents || line == inactiveEvents {
 			newInd := ind
 			for newInd < len(lines)-1 {
 				newInd++
@@ -89,10 +113,10 @@ func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 				}
 			}
 			switch line {
-			case "Tasks":
-				tasks = append(tasks, mdToTasks(lines[ind+1:newInd], offsets[ind+1:newInd])...)
-			case "Events":
-				events = append(events, mdToEvents(lines[ind+1:newInd], offsets[ind+1:newInd])...)
+			case upcomingTasks, overdueTasks, completedTasks:
+				tasks = append(tasks, mdToTasks(rawLines[ind+1:newInd], lines[ind+1:newInd], offsets[ind+1:newInd])...)
+			case repeatingEvents, inactiveEvents:
+				events = append(events, mdToEvents(rawLines[ind+1:newInd], lines[ind+1:newInd], offsets[ind+1:newInd])...)
 			}
 			ind = newInd
 			continue
@@ -102,13 +126,12 @@ func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 	return events, tasks
 }
 
-func mdToTasks(lines []string, offsets []int) []*Task {
+func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
 	// offset goes up; that's the name, beginning of new Task
 	// offset stays equal or goes down; that's a field
 	newTask := &Task{}
 	previousOffset := -1
 	tasks := []*Task{}
-	fmt.Println(lines)
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
@@ -138,18 +161,18 @@ func mdToTasks(lines []string, offsets []int) []*Task {
 				fmt.Println(tokens[0])
 			}
 		}
+		newTask.AddRaw(rawLines[index])
 		previousOffset = offset
 	}
 	return tasks
 }
 
-func mdToEvents(lines []string, offsets []int) []*GeneralEvent {
+func mdToEvents(rawLines []string, lines []string, offsets []int) []*GeneralEvent {
 	// offset goes up; that's the name, beginning of new Task
 	// offset stays equal or goes down; that's a field
 	newEvent := &GeneralEvent{}
 	previousOffset := -1
 	events := []*GeneralEvent{}
-	fmt.Println(lines)
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
@@ -184,11 +207,19 @@ func mdToEvents(lines []string, offsets []int) []*GeneralEvent {
 					fmt.Println(err)
 				}
 				newEvent.Duration = num
+			case "Inactive":
+				fmt.Printf("Adding Inactivity: '%s'\n", tokens[1])
+				ans, err := strconv.ParseBool(tokens[1])
+				if err != nil {
+					fmt.Println(err)
+				}
+				newEvent.Inactive = ans
 			default:
 				fmt.Println("Whoopsie!")
 				fmt.Println(tokens[0])
 			}
 		}
+		newEvent.AddRaw(rawLines[index])
 		previousOffset = offset
 	}
 	return events

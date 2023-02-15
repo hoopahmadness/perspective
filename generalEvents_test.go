@@ -48,6 +48,8 @@ func TestGenEventBlockedHours(t *testing.T) {
 	}
 }
 
+// add test that inactive events don't count as busy
+
 func compareIntArr(arr1, arr2 []int) bool {
 	if len(arr1) != len(arr2) {
 		return false
