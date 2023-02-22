@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 const (
@@ -40,19 +43,55 @@ func main() {
 	// mostUrgent
 
 	// thread for hourly updates
+	// change this to on the hour updates
+	// only write update if order of tasks is different
+	// file watcher lets us update 20 seconds? after last change
 	go func() {
 		for {
-			fmt.Println("Updating task list")
+			waitForTopOfHour()
 			refreshList()
-			time.Sleep(1 * time.Hour)
 		}
 	}()
+
+	// Create new watcher.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				log.Println("event:", event)
+				if event.Has(fsnotify.Write) {
+					log.Println("modified file:", event.Name)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	// Add a path.
+	err = watcher.Add("/tmp")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// run server
 	<-quitChan
 }
 
 func refreshList() {
+	fmt.Println("Updating task list")
 	ourEvents, ourTasks, err := readFromFile()
 	if err != nil {
 		fmt.Println(err)
@@ -60,7 +99,6 @@ func refreshList() {
 	}
 	sortTasks(ourTasks, time.Now(), ourEvents)
 	writeToFile(ourEvents, ourTasks)
-
 }
 
 // read/write events to md file

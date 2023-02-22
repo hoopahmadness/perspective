@@ -82,7 +82,7 @@ func whatDayIsIt(now time.Time) string {
 		rotation = "second"
 		hourBlock -= 168
 	}
-	switch  {
+	switch {
 	case hourBlock >= 144:
 		weekday = "Saturday"
 	case hourBlock >= 120:
@@ -181,4 +181,14 @@ func generateBlockedHours(days []time.Weekday, rotation rotation, startTime, dur
 	}
 	sort.Ints(hourBlocks)
 	return hourBlocks
+}
+
+// Blocks until the 0 minute mark in a given hour
+func waitForTopOfHour() {
+	min := time.Now().Minute()
+	wait := 60 - min
+	if wait == 60 {
+		wait = 0
+	}
+	time.Sleep(time.Duration(wait) * time.Minute)
 }
