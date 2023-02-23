@@ -204,42 +204,19 @@ func outputTasks(taskList []*Task) string {
 	return outStr
 }
 
-// func (t byUrgency) String() string {
-// 	outStr := ""
-// 	topFive := []*Task{}
-// 	finished := []*Task{}
-// 	deadlinePassed := []*Task{}
-// 	for index, task := range t {
-// 		if index < 5 && task.Urgency > 0 {
-// 			topFive = append(topFive, task)
-// 		}
-// 		if task.Urgency == 0 {
-// 			finished = append(finished, task)
-// 		}
-// 		if task.Urgency < 0 {
-// 			deadlinePassed = append(deadlinePassed, task)
-// 		}
-// 	}
-// 	if len(topFive) != 0 {
-// 		outStr = "- Most Urgent Tasks\n"
-// 		for _, task := range topFive {
-// 			outStr += fmt.Sprintf("	- %s:\t\t%.2f%% urgent\n", task.Name, task.Urgency*100)
-// 		}
-// 	}
-// 	if len(deadlinePassed) != 0 {
-// 		outStr += "- Overdue Tasks\n"
-// 		for _, task := range deadlinePassed {
-// 			outStr += fmt.Sprintf("	- %s:\t\t%s\n", task.Name, task.Deadline)
-// 		}
-// 	}
-// 	if len(finished) != 0 {
-// 		outStr += "- Finished Tasks\n"
-// 		for _, task := range finished {
-// 			outStr += fmt.Sprintf("	- %s\n", task.Name)
-// 		}
-// 	}
-// 	return outStr
-// }
+func compareLists(a, b []*Task) bool {
+	if len(a) != len(b) {
+		return true
+	}
+	for ind, aTask := range a {
+		bTask := b[ind]
+		fmt.Printf("Comparing %s to %s\n", aTask.Name, bTask.Name)
+		if aTask.Name != bTask.Name {
+			return true
+		}
+	}
+	return false
+}
 
 /*
 config file will have file names for the following:

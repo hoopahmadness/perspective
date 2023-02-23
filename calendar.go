@@ -183,12 +183,9 @@ func generateBlockedHours(days []time.Weekday, rotation rotation, startTime, dur
 	return hourBlocks
 }
 
-// Blocks until the 0 minute mark in a given hour
+// Blocks until the 0 minute mark in a given hour; if it's currently the 0 minute then we wait a full hour
 func waitForTopOfHour() {
 	min := time.Now().Minute()
 	wait := 60 - min
-	if wait == 60 {
-		wait = 0
-	}
 	time.Sleep(time.Duration(wait) * time.Minute)
 }

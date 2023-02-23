@@ -36,6 +36,36 @@ func main() {
 
 	quitChan := make(chan bool)
 
+	writeTimer := time.NewTimer(0)
+	writeDelay := 20 * time.Second
+
+	// Create new watcher.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	previousTasks := []*Task{}
+
+	refreshList := func() {
+		fmt.Println("Updating task list")
+		ourEvents, ourTasks, err := readFromFile()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		sortTasks(ourTasks, time.Now(), ourEvents)
+		if compareLists(previousTasks, ourTasks) {
+			writeToFile(ourEvents, ourTasks)
+			time.Sleep(1 * time.Second)
+			writeTimer.Stop()
+		} else {
+			fmt.Println("Task list not different enough, skipping write.")
+		}
+		previousTasks = ourTasks
+	}
+
 	// get api password from arguments
 
 	// define handlers
@@ -46,6 +76,11 @@ func main() {
 	// change this to on the hour updates
 	// only write update if order of tasks is different
 	// file watcher lets us update 20 seconds? after last change
+
+	// refresh list on startup
+	refreshList()
+
+	// refresh every hour on the hour
 	go func() {
 		for {
 			waitForTopOfHour()
@@ -53,52 +88,40 @@ func main() {
 		}
 	}()
 
-	// Create new watcher.
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer watcher.Close()
-
+	// refresh on delay after file change
 	go func() {
 		for {
 			select {
 			case event, ok := <-watcher.Events:
 				if !ok {
+					fmt.Println("event not OK")
 					return
 				}
-				log.Println("event:", event)
+				// fmt.Println("event:", event)
 				if event.Has(fsnotify.Write) {
-					log.Println("modified file:", event.Name)
+					// fmt.Println("modified file:", event.Name)
+					writeTimer.Stop()
+					writeTimer = time.AfterFunc(writeDelay, refreshList)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
+					fmt.Println("error not OK")
 					return
 				}
-				log.Println("error:", err)
+				fmt.Println("error:", err)
 			}
 		}
 	}()
 
 	// Add a path.
-	err = watcher.Add("/tmp")
+	dir := os.Getenv("NOTESDIR")
+	err = watcher.Add(dir + "/" + tasksFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// run server
 	<-quitChan
-}
-
-func refreshList() {
-	fmt.Println("Updating task list")
-	ourEvents, ourTasks, err := readFromFile()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	sortTasks(ourTasks, time.Now(), ourEvents)
-	writeToFile(ourEvents, ourTasks)
 }
 
 // read/write events to md file
