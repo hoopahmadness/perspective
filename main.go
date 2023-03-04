@@ -192,21 +192,30 @@ func mdToStructs(rawLines []string, logger log15.Logger) ([]*GeneralEvent, []*Ta
 	tasks := []*Task{}
 	offsets := []int{}
 	lines := []string{}
+
+	// add a newline to the raw text
 	rawLines = append(rawLines, "\n")
+
+	// generate list of lines and matching offsets
 	for _, raw := range rawLines {
 		line, offset := organizeLines(raw)
 		lines = append(lines, line)
 		offsets = append(offsets, offset)
 	}
+
+	// loop through lines until we get to one of the literature headers
 	for ind := 0; ind < len(lines); {
 		line := lines[ind]
 		offset := offsets[ind]
+
 		if line == upcomingTasks || line == overdueTasks || line == completedTasks || line == repeatingEvents || line == inactiveEvents {
 			newInd := ind
+			// loop over all lines within the header, judged by waiting until the offset matches the header's offset (new potential header)
 			for newInd < len(lines)-1 {
 				newInd++
 				newOffset := offsets[newInd]
 				if newOffset == offset {
+					// now we have an index corresponding to the end of this section
 					break
 				}
 			}
@@ -229,21 +238,24 @@ func mdToTasks(rawLines []string, lines []string, offsets []int, topLogger log15
 	// offset goes up; that's the name, beginning of new Task
 	// offset stays equal or goes down; that's a field
 	newTask := &Task{}
-	previousOffset := -1
 	tasks := []*Task{}
+	namesOffset := -1
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
-		loopLogger := topLogger.New("line", line, "offset", offset, "previousOffset", previousOffset, "index", index)
+		if index == 0 {
+			namesOffset = offset
+		}
+		loopLogger := topLogger.New("line", line, "offset", offset, "NamesOffset", namesOffset, "index", index)
 		loopLogger.Debug("Analyzing new Task line")
 		switch {
-		case previousOffset == -1 || offset < previousOffset:
+		case (offset == namesOffset):
 			loopLogger.Debug("Adding Name")
 			newTask = &Task{
 				Name: line,
 			}
 			tasks = append(tasks, newTask)
-		case offset >= previousOffset:
+		case offset > namesOffset:
 			tokens := strings.Split(line, "; ")
 			switch tokens[0] {
 			case "Deadline":
@@ -259,9 +271,10 @@ func mdToTasks(rawLines []string, lines []string, offsets []int, topLogger log15
 			default:
 				loopLogger.Debug("Line didn't correspond to Name, Deadline, or Hours; skipping")
 			}
+		case offset < namesOffset:
+			loopLogger.Warn("We're parsing a line that has fewer offsets than the first line did...")
 		}
 		newTask.AddRaw(rawLines[index])
-		previousOffset = offset
 	}
 	return tasks
 }
@@ -271,21 +284,24 @@ func mdToEvents(rawLines []string, lines []string, offsets []int, topLogger log1
 	// offset goes up; that's the name, beginning of new Task
 	// offset stays equal or goes down; that's a field
 	newEvent := &GeneralEvent{}
-	previousOffset := -1
+	namesOffset := -1
 	events := []*GeneralEvent{}
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
-		loopLogger := topLogger.New("line", line, "offset", offset, "previousOffset", previousOffset, "index", index)
+		if index == 0 {
+			namesOffset = offset
+		}
+		loopLogger := topLogger.New("line", line, "offset", offset, "namesOffset", namesOffset, "index", index)
 		loopLogger.Debug("Analyzing new Event line")
 		switch {
-		case previousOffset == -1 || offset < previousOffset:
+		case (offset == namesOffset):
 			loopLogger.Debug("Adding Name")
 			newEvent = &GeneralEvent{
 				Name: line,
 			}
 			events = append(events, newEvent)
-		case offset >= previousOffset:
+		case offset > namesOffset:
 			tokens := strings.Split(line, "; ")
 			switch tokens[0] {
 			case "Rotation":
@@ -318,9 +334,11 @@ func mdToEvents(rawLines []string, lines []string, offsets []int, topLogger log1
 			default:
 				loopLogger.Debug("Line didn't correspond to Name, Rotation, Days, Start, Duration, or Inactivity; skipping")
 			}
+		case offset < namesOffset:
+			loopLogger.Warn("We're parsing a line that has fewer offsets than the first line did...")
+
 		}
 		newEvent.AddRaw(rawLines[index])
-		previousOffset = offset
 	}
 	return events
 }
