@@ -124,6 +124,7 @@ func main() {
 
 	// run server
 	<-quitChan
+	logger.Info("Perspective is shutting down.")
 }
 
 // read/write events to md file
