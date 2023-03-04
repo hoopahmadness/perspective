@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/inconshreveable/log15"
 )
 
 // Off Sunday 09/11 2022 No DST
@@ -17,15 +19,16 @@ var updateLineFmt = "15:04 01/02/2006 MST"
 // function used to set the global variable PrimeSunday, which is one of two literature values used to define
 // which sundays are prime (as opposed to being second sundays)
 func getPrimeSunday() time.Time {
+	logger := log15.New("function", "getPrimeSunday")
 	zone, _ := time.Now().Zone()
 	primeSundayNoDST, err := time.Parse(primeDateFmt, "Sun 09/11 2022 "+zone)
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Error("Unable to parse Prime Sunday No DST String", "err", err.Error())
 	}
 	NoDSTZone, _ := primeSundayNoDST.Zone()
 	primeSundayDST, err := time.Parse(primeDateFmt, "Sun 11/20 2022 "+zone)
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Error("Unable to parse Prime Sunday DST String", "err", err.Error())
 	}
 	if NoDSTZone == zone {
 		return primeSundayNoDST
@@ -74,7 +77,7 @@ func nextHourBlock(now time.Time) int {
 
 // function that takes a time and generates a string representation of what day and rotation
 // that time corresponds to.
-func whatDayIsIt(now time.Time) string {
+func whatDayIsIt(now time.Time, logger log15.Logger) string {
 	hourBlock := nextHourBlock(now)
 	rotation := "first"
 	weekday := ""
@@ -98,7 +101,7 @@ func whatDayIsIt(now time.Time) string {
 	case hourBlock >= 0:
 		weekday = "Sunday"
 	default:
-		fmt.Println("Got a bad hourblock")
+		logger.Warn("Got a bad hourblock", "function", "whatDayIsIt")
 	}
 
 	return fmt.Sprintf("%s %s", rotation, weekday)

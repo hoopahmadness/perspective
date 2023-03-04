@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/inconshreveable/log15"
 )
 
 const (
@@ -32,6 +33,8 @@ var genTextMatcher *regexp.Regexp
 
 func main() {
 
+	logger := log15.New()
+
 	genTextMatcher, _ = regexp.Compile(`\t{2}- \*(.+)\*`)
 
 	quitChan := make(chan bool)
@@ -49,19 +52,19 @@ func main() {
 	previousTasks := []*Task{}
 
 	refreshList := func() {
-		fmt.Println("Updating task list")
-		ourEvents, ourTasks, err := readFromFile()
+		logger.Info("Updating task list")
+		ourEvents, ourTasks, err := readFromFile(logger)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
 			return
 		}
-		sortTasks(ourTasks, time.Now(), ourEvents)
-		if compareLists(previousTasks, ourTasks) {
-			writeToFile(ourEvents, ourTasks)
+		sortTasks(ourTasks, time.Now(), ourEvents, logger)
+		if compareLists(previousTasks, ourTasks, logger) {
+			writeToFile(ourEvents, ourTasks, logger)
 			time.Sleep(1 * time.Second)
 			writeTimer.Stop()
 		} else {
-			fmt.Println("Task list not different enough, skipping write.")
+			logger.Debug("Task list not different enough, skipping write.")
 		}
 		previousTasks = ourTasks
 	}
@@ -94,21 +97,20 @@ func main() {
 			select {
 			case event, ok := <-watcher.Events:
 				if !ok {
-					fmt.Println("event not OK")
+					logger.Error("event not OK")
 					return
 				}
-				// fmt.Println("event:", event)
 				if event.Has(fsnotify.Write) {
-					// fmt.Println("modified file:", event.Name)
+					logger.Debug("File has been modified", "event", event.Name)
 					writeTimer.Stop()
 					writeTimer = time.AfterFunc(writeDelay, refreshList)
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
-					fmt.Println("error not OK")
+					logger.Error("error not OK")
 					return
 				}
-				fmt.Println("error:", err)
+				logger.Error("File watching error", "err", err.Error())
 			}
 		}
 	}()
@@ -117,7 +119,7 @@ func main() {
 	dir := os.Getenv("NOTESDIR")
 	err = watcher.Add(dir + "/" + tasksFile)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("Problem watching path", "err", err.Error())
 	}
 
 	// run server
@@ -125,18 +127,24 @@ func main() {
 }
 
 // read/write events to md file
-func readFromFile() ([]*GeneralEvent, []*Task, error) {
+func readFromFile(logger log15.Logger) ([]*GeneralEvent, []*Task, error) {
 	dir := os.Getenv("NOTESDIR")
 	if dir == "" {
 		fmt.Println("Don't forget to set NOTESDIR")
 		dir = "~/Documents/Logseq/personal/pages"
+		logger.Warn("Empty notes directory, adding default", "default", dir)
 	}
 	// pull in tasks file
 	readFile, err := os.Open(dir + "/" + tasksFile)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error("Error reading Task file", "err", err.Error())
 	}
-	defer readFile.Close()
+	defer func() {
+		err := readFile.Close()
+		if err != nil {
+			logger.Warn("Unable to close writing file handler; perhaps restart is needed", "err", err.Error())
+		}
+	}()
 	fileScanner := bufio.NewScanner(readFile)
 	fileScanner.Split(bufio.ScanLines)
 	lines := []string{}
@@ -145,25 +153,33 @@ func readFromFile() ([]*GeneralEvent, []*Task, error) {
 		lines = append(lines, line)
 	}
 	if len(lines) < 3 {
-		return []*GeneralEvent{}, []*Task{}, errors.New("Tried the default notes directory but no dice")
+		return []*GeneralEvent{}, []*Task{}, errors.New("tried the default notes directory but no dice")
 	}
-	ev, ta := mdToStructs(lines)
+	ev, ta := mdToStructs(lines, logger)
 	return ev, ta, nil
 }
 
-func writeToFile(events []*GeneralEvent, tasks []*Task) {
+func writeToFile(events []*GeneralEvent, tasks []*Task, logger log15.Logger) {
 	dir := os.Getenv("NOTESDIR")
 	if dir == "" {
 		fmt.Println("Don't forget to set NOTESDIR")
+		dir = "~/Documents/Logseq/personal/pages"
+		logger.Warn("Empty notes directory, adding default", "default", dir)
 	}
 	w, err := os.Create(dir + "/" + tasksFile)
-	defer w.Close()
+	defer func() {
+		err := w.Close()
+		if err != nil {
+			logger.Warn("Unable to close writing file handler; perhaps restart is needed", "err", err.Error())
+		}
+	}()
 	if err != nil {
-		fmt.Println(err)
+		logger.Error("Error writing to Task file", "err", err.Error())
 	}
-	w.WriteString(fmt.Sprintf("Updated at %s: %s", time.Now().Format(updateLineFmt), whatDayIsIt(time.Now())))
+	w.WriteString(fmt.Sprintf("Updated at %s: %s", time.Now().Format(updateLineFmt), whatDayIsIt(time.Now(), logger)))
 	w.WriteString(outputTasks(tasks))
 	w.WriteString(outputEvents(events))
+	logger.Info("Updated To Do List file")
 }
 
 func organizeLines(rawLine string) (string, int) {
@@ -171,11 +187,7 @@ func organizeLines(rawLine string) (string, int) {
 	return strings.Trim(rawLine, "- 	"), len(tokens)
 }
 
-// read/write blocked days to json file
-// change blocked hours to 2 weekly schedule instead of weekly schedule (primary, secondary week)
-// when serving, calculate urgency of task or tasks and return
-
-func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
+func mdToStructs(rawLines []string, logger log15.Logger) ([]*GeneralEvent, []*Task) {
 	events := []*GeneralEvent{}
 	tasks := []*Task{}
 	offsets := []int{}
@@ -200,9 +212,9 @@ func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 			}
 			switch line {
 			case upcomingTasks, overdueTasks, completedTasks:
-				tasks = append(tasks, mdToTasks(rawLines[ind+1:newInd], lines[ind+1:newInd], offsets[ind+1:newInd])...)
+				tasks = append(tasks, mdToTasks(rawLines[ind+1:newInd], lines[ind+1:newInd], offsets[ind+1:newInd], logger)...)
 			case repeatingEvents, inactiveEvents:
-				events = append(events, mdToEvents(rawLines[ind+1:newInd], lines[ind+1:newInd], offsets[ind+1:newInd])...)
+				events = append(events, mdToEvents(rawLines[ind+1:newInd], lines[ind+1:newInd], offsets[ind+1:newInd], logger)...)
 			}
 			ind = newInd
 			continue
@@ -212,7 +224,8 @@ func mdToStructs(rawLines []string) ([]*GeneralEvent, []*Task) {
 	return events, tasks
 }
 
-func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
+func mdToTasks(rawLines []string, lines []string, offsets []int, topLogger log15.Logger) []*Task {
+	topLogger = topLogger.New("function", "mdToTasks")
 	// offset goes up; that's the name, beginning of new Task
 	// offset stays equal or goes down; that's a field
 	newTask := &Task{}
@@ -221,10 +234,11 @@ func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
-		// fmt.Printf("Tasks - line # %d says %s, offset is %d, previousOffset is %d \n", index, line, offset, previousOffset)
+		loopLogger := topLogger.New("line", line, "offset", offset, "previousOffset", previousOffset, "index", index)
+		loopLogger.Debug("Analyzing new Task line")
 		switch {
 		case previousOffset == -1 || offset < previousOffset:
-			// fmt.Println("Adding Name")
+			loopLogger.Debug("Adding Name")
 			newTask = &Task{
 				Name: line,
 			}
@@ -233,18 +247,17 @@ func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
 			tokens := strings.Split(line, "; ")
 			switch tokens[0] {
 			case "Deadline":
-				// fmt.Printf("Adding Deadline: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Deadline", "deadline", tokens[1])
 				newTask.Deadline = tokens[1]
 			case "Estimated Hours":
-				// fmt.Printf("Adding Estimated Hours: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Estimated Hours", "hours", tokens[1])
 				num, err := strconv.Atoi(tokens[1])
 				if err != nil {
-					fmt.Println(err)
+					loopLogger.Error("Error transforming hours into number", "err", err.Error(), "hours", tokens[1])
 				}
 				newTask.EstimatedHours = num
 			default:
-				// fmt.Println("Whoopsie!")
-				// fmt.Println(tokens[0])
+				loopLogger.Debug("Line didn't correspond to Name, Deadline, or Hours; skipping")
 			}
 		}
 		newTask.AddRaw(rawLines[index])
@@ -253,7 +266,8 @@ func mdToTasks(rawLines []string, lines []string, offsets []int) []*Task {
 	return tasks
 }
 
-func mdToEvents(rawLines []string, lines []string, offsets []int) []*GeneralEvent {
+func mdToEvents(rawLines []string, lines []string, offsets []int, topLogger log15.Logger) []*GeneralEvent {
+	topLogger = topLogger.New("function", "mdToEvents")
 	// offset goes up; that's the name, beginning of new Task
 	// offset stays equal or goes down; that's a field
 	newEvent := &GeneralEvent{}
@@ -262,10 +276,11 @@ func mdToEvents(rawLines []string, lines []string, offsets []int) []*GeneralEven
 	for index, line := range lines {
 		line = strings.Trim(line, " ")
 		offset := offsets[index]
-		// fmt.Printf("Events - line # %d says %s, offset is %d, previousOffset is %d \n", index, line, offset, previousOffset)
+		loopLogger := topLogger.New("line", line, "offset", offset, "previousOffset", previousOffset, "index", index)
+		loopLogger.Debug("Analyzing new Event line")
 		switch {
 		case previousOffset == -1 || offset < previousOffset:
-			// fmt.Println("Adding Name")
+			loopLogger.Debug("Adding Name")
 			newEvent = &GeneralEvent{
 				Name: line,
 			}
@@ -274,35 +289,34 @@ func mdToEvents(rawLines []string, lines []string, offsets []int) []*GeneralEven
 			tokens := strings.Split(line, "; ")
 			switch tokens[0] {
 			case "Rotation":
-				// fmt.Printf("Adding Rotation: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Rotation", "rotation", tokens[1])
 				newEvent.Rotation = rotation(tokens[1])
 			case "Days":
-				// fmt.Printf("Adding Days: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Days", "days", tokens[1])
 				newEvent.Days = tokens[1]
 			case "Start Time":
-				// fmt.Printf("Adding Start Time: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Start Time", "start", tokens[1])
 				num, err := strconv.Atoi(tokens[1])
 				if err != nil {
-					fmt.Println(err)
+					loopLogger.Error("Error transforming start time into number", "err", err.Error(), "start", tokens[1])
 				}
 				newEvent.StartTime = num
 			case "Duration":
-				// fmt.Printf("Adding Duration: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Duration", "duration", tokens[1])
 				num, err := strconv.Atoi(tokens[1])
 				if err != nil {
-					fmt.Println(err)
+					loopLogger.Error("Error transforming duration into number", "err", err.Error(), "duration", tokens[1])
 				}
 				newEvent.Duration = num
 			case "Inactive":
-				// fmt.Printf("Adding Inactivity: '%s'\n", tokens[1])
+				loopLogger.Debug("Adding Inactivity", "inactive", tokens[1])
 				ans, err := strconv.ParseBool(tokens[1])
 				if err != nil {
-					fmt.Println(err)
+					loopLogger.Error("Error transforming inactivity into boolean", "err", err.Error(), "inactive", tokens[1])
 				}
 				newEvent.Inactive = ans
 			default:
-				// fmt.Println("Whoopsie!")
-				// fmt.Println(tokens[0])
+				loopLogger.Debug("Line didn't correspond to Name, Rotation, Days, Start, Duration, or Inactivity; skipping")
 			}
 		}
 		newEvent.AddRaw(rawLines[index])

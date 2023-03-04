@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/inconshreveable/log15"
 )
 
 type Task struct {
@@ -52,41 +54,42 @@ func (t *Task) String() string {
 	return t.PrintRaw()
 }
 
-func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
+func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logger) int {
 	deadlineHourBlock := 0
 	interveningFortnites := 0
 	nowHourBlock := nextHourBlock(now)
-	// fmt.Printf("NOW is hour %d\n", nowHourBlock)
+	logger = logger.New("NOW", nowHourBlock)
+	logger.Debug("Getting hours left for task")
 	// try to parse Deadline into time
 	deadline, err := time.Parse(taskDateFmt, t.Deadline)
 
 	if err == nil { // this is a single dated task
-		// fmt.Println("This is a single dated task")
+		logger = logger.New("task mode", "single")
+		logger.Debug("This is a single dated task", "deadline", deadline)
 		for {
 			earlyDeadline := deadline.Add(-1 * time.Hour * fullTwoWeeks)
 			if getZeroSunday(now).After(earlyDeadline) { // We should be comparing deadline to the beginning of the two week rotation, not the day itself!
-				// fmt.Println("We went back too far")
+				logger.Debug("We subtracted enough fortnights", "subtracted", interveningFortnites, "newDeadline", deadline)
 				break
 			}
 			interveningFortnites++
-			// fmt.Printf("Fortnights: %d\n", interveningFortnites)
-			// fmt.Printf("early deadline: %v \n now: %v\n", earlyDeadline, now)
 			deadline = earlyDeadline
 		}
 		deadlineHourBlock = nextHourBlock(deadline)
 	} else { // this is a repeating task, we need to find the next instance of this deadline
-		// fmt.Println("This is a repeating task")
-		deadlineHour, weekRotation, days := t.parseRepeatingDays()
+		logger = logger.New("task mode", "repeating")
+		logger.Debug("This is a repeating task", "repeatingDays", t.Deadline)
+		deadlineHour, weekRotation, days := t.parseRepeatingDays(logger)
 		hours := generateBlockedHours(days, weekRotation, deadlineHour, 1)
 		wrap := 0
 		for index := 0; ; index++ {
 			if index == len(hours) {
 				index = 0
 				wrap = 1
-				// fmt.Println("wrapping")
+				logger.Debug("wrapping")
 			}
 			hour := hours[index] + (wrap * fullTwoWeeks)
-			// fmt.Printf("we're comparing hour %d to nowHourBlock %d\n", hour, nowHourBlock)
+			logger.Debug(fmt.Sprintf("we're comparing hour %d to nowHourBlock %d\n", hour, nowHourBlock))
 			if hour > nowHourBlock {
 				deadlineHourBlock = hour
 				break
@@ -94,13 +97,14 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 		}
 	}
 	// now we have a deadline hour block but it's normalized to this rotation; let's un-normalize it
-	// fmt.Printf("Deadline hour is %d\n", deadlineHourBlock)
+	logger.Debug("Deadline hour calculated", "hour", deadlineHourBlock)
 	deadlineHourBlock += interveningFortnites * fullTwoWeeks
 
 	remainingFreeHours := deadlineHourBlock - nowHourBlock
-	// fmt.Printf("remaining = %d - %d = %d\n", deadlineHourBlock, nowHourBlock, remainingFreeHours)
 
 	wraps := 0
+	logger = logger.New("freeHours", &remainingFreeHours)
+	logger.Debug("Ticking off remaining free hours")
 	for index := 0; ; index++ {
 		if index == len(blockedHours) {
 			if index == 0 {
@@ -118,38 +122,41 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int) int {
 		}
 		remainingFreeHours += -1
 		t.BusyHours += 1
-		// fmt.Printf("Hour %d (%d) is blocked, remainingFreeHours is %d \n", blockedHours[index], eventHourBlock, remainingFreeHours)
+		// logger.Debug(fmt.Sprintf("Hour %d (%d) is blocked, remainingFreeHours is %d \n", blockedHours[index], eventHourBlock, remainingFreeHours))
 	}
-	// fmt.Println("")
 	t.RemainingHours = remainingFreeHours
 	return remainingFreeHours
 }
 
-func (t *Task) calculateUrgency(now time.Time, genEvents []*GeneralEvent) {
-	hoursLeft := t.getHoursLeft(now, getNextBlockedHours(now, genEvents))
+func (t *Task) calculateUrgency(now time.Time, genEvents []*GeneralEvent, logger log15.Logger) {
+	hoursLeft := t.getHoursLeft(now, getNextBlockedHours(now, genEvents, logger), logger)
 	t.Urgency = float32(t.EstimatedHours) / float32(hoursLeft)
+	logger.Debug("Calculated urgency", "urgency", t.Urgency)
 }
 
-func (t *Task) parseRepeatingDays() (hour int, weekRotation rotation, days []time.Weekday) {
+func (t *Task) parseRepeatingDays(logger log15.Logger) (hour int, weekRotation rotation, days []time.Weekday) {
+	logger.Debug("Parsing deadline for repeating task", "deadline", t.Deadline)
 	tokens := strings.Split(strings.ToLower(t.Deadline), " ")
 	militaryTime := tokens[0]
 	hour, err := strconv.Atoi(strings.Split(militaryTime, ":")[0])
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Error("Problem converting hour portion of repeating deadline", "err", err.Error())
 	}
 	weekRotation = rotation(tokens[1])
 	//everything else is days
 	daysStr := strings.Join(tokens[2:], " ")
 	days, err = parseDayStrings(daysStr)
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Error("Problem converting days portion of repeating deadline", "err", err.Error())
 	}
 	return
 }
 
-func sortTasks(tasks []*Task, now time.Time, genEvents []*GeneralEvent) {
+func sortTasks(tasks []*Task, now time.Time, genEvents []*GeneralEvent, topLogger log15.Logger) {
+	topLogger.Debug("Sorting Tasks")
 	for _, task := range tasks {
-		task.calculateUrgency(now, genEvents)
+		logger := topLogger.New("task", task)
+		task.calculateUrgency(now, genEvents, logger)
 	}
 	sort.Sort(byUrgency(tasks))
 }
@@ -204,13 +211,13 @@ func outputTasks(taskList []*Task) string {
 	return outStr
 }
 
-func compareLists(a, b []*Task) bool {
+func compareLists(a, b []*Task, logger log15.Logger) bool {
 	if len(a) != len(b) {
 		return true
 	}
 	for ind, aTask := range a {
 		bTask := b[ind]
-		fmt.Printf("Comparing %s to %s\n", aTask.Name, bTask.Name)
+		logger.Debug("Comparing tasks", "taskA", aTask.Name, "taskB", bTask.Name)
 		if aTask.Name != bTask.Name {
 			return true
 		}

@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/inconshreveable/log15"
 )
 
 // General Events are blocks of time on the Blocked Hours calendar. They represent days and hours of a normal two week period
@@ -40,19 +42,20 @@ func (e *GeneralEvent) String() string {
 }
 
 // Method for a GeneralEvent that returns a list of hourBlocks for an arbitrary 2 week rotation
-func (event *GeneralEvent) generateBlockedHours() []int {
+func (event *GeneralEvent) generateBlockedHours(logger log15.Logger) []int {
 	days, err := parseDayStrings(event.Days)
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Error("Problem parsing day strings", "days", event.Days, "err", err.Error())
 	}
 	return generateBlockedHours(days, event.Rotation, event.StartTime, event.Duration)
 }
 
-func getNextBlockedHours(now time.Time, genEvents []*GeneralEvent) []int {
+func getNextBlockedHours(now time.Time, genEvents []*GeneralEvent, topLogger log15.Logger) []int {
 	hourblocks := []int{}
 	upcomingHour := nextHourBlock(now)
 	for _, event := range genEvents {
-		hours := event.generateBlockedHours()
+		logger := topLogger.New("event", event, "function", "getNextBlockedHours", "upcomingHour", upcomingHour)
+		hours := event.generateBlockedHours(logger)
 		for _, hour := range hours {
 			if hour <= upcomingHour {
 				hour += fullTwoWeeks
