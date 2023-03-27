@@ -42,6 +42,8 @@ func main() {
 	writeTimer := time.NewTimer(0)
 	writeDelay := 20 * time.Second
 
+	turnBlindEye := false
+
 	// Create new watcher.
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -60,7 +62,7 @@ func main() {
 		}
 		sortTasks(ourTasks, time.Now(), ourEvents, logger)
 		if compareLists(previousTasks, ourTasks, logger) {
-			writeToFile(ourEvents, ourTasks, logger)
+			writeToFile(ourEvents, ourTasks, &turnBlindEye, logger)
 			time.Sleep(1 * time.Second)
 			writeTimer.Stop()
 		} else {
@@ -100,10 +102,17 @@ func main() {
 					logger.Error("event not OK")
 					return
 				}
-				if event.Has(fsnotify.Write) {
-					logger.Debug("File has been modified", "event", event.Name)
-					writeTimer.Stop()
-					writeTimer = time.AfterFunc(writeDelay, refreshList)
+				if strings.Contains(event.Name, tasksFile) {
+
+					if turnBlindEye {
+						logger.Debug("Turning a blind eye to file update")
+						continue
+					}
+					if event.Has(fsnotify.Write) {
+						logger.Debug("File has been modified", "event", event.Name)
+						writeTimer.Stop()
+						writeTimer = time.AfterFunc(writeDelay, refreshList)
+					}
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
@@ -117,7 +126,7 @@ func main() {
 
 	// Add a path.
 	dir := os.Getenv("NOTESDIR")
-	err = watcher.Add(dir + "/" + tasksFile)
+	err = watcher.Add(dir + "/")
 	if err != nil {
 		logger.Error("Problem watching path", "err", err.Error())
 	}
@@ -160,8 +169,12 @@ func readFromFile(logger log15.Logger) ([]*GeneralEvent, []*Task, error) {
 	return ev, ta, nil
 }
 
-func writeToFile(events []*GeneralEvent, tasks []*Task, logger log15.Logger) {
+func writeToFile(events []*GeneralEvent, tasks []*Task, turnBlindEye *bool, logger log15.Logger) {
 	dir := os.Getenv("NOTESDIR")
+	*turnBlindEye = true
+	defer func() {
+		*turnBlindEye = false
+	}()
 	if dir == "" {
 		fmt.Println("Don't forget to set NOTESDIR")
 		dir = "~/Documents/Logseq/personal/pages"
