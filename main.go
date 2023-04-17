@@ -41,7 +41,7 @@ func main() {
 	quitChan := make(chan bool)
 
 	writeTimer := time.NewTimer(0)
-	writeDelay := 20 * time.Second
+	writeDelay := 10 * time.Second
 
 	turnBlindEye := false
 
@@ -63,11 +63,12 @@ func main() {
 		}
 		err = sortTasks(ourTasks, time.Now(), ourEvents, logger)
 		if err != nil {
-			logger.Error(err.Error())
+			logger.Warn("Unable to sort tasks, dumping text with err warning")
+			writeToFile(ourEvents, ourTasks, &turnBlindEye, err, logger)
 			return
 		}
 		if compareLists(previousTasks, ourTasks, logger) {
-			writeToFile(ourEvents, ourTasks, &turnBlindEye, logger)
+			writeToFile(ourEvents, ourTasks, &turnBlindEye, nil, logger)
 			time.Sleep(1 * time.Second)
 			writeTimer.Stop()
 		} else {
@@ -174,7 +175,7 @@ func readFromFile(logger log15.Logger) ([]*GeneralEvent, []*Task, error) {
 	return ev, ta, nil
 }
 
-func writeToFile(events []*GeneralEvent, tasks []*Task, turnBlindEye *bool, logger log15.Logger) {
+func writeToFile(events []*GeneralEvent, tasks []*Task, turnBlindEye *bool, writeError error, logger log15.Logger) {
 	dir := os.Getenv("NOTESDIR")
 	*turnBlindEye = true
 	defer func() {
@@ -195,7 +196,11 @@ func writeToFile(events []*GeneralEvent, tasks []*Task, turnBlindEye *bool, logg
 	if err != nil {
 		logger.Error("Error writing to Task file", "err", err.Error())
 	}
-	w.WriteString(fmt.Sprintf("Updated at %s: %s", time.Now().Format(updateLineFmt), whatDayIsIt(time.Now(), logger)))
+	w.WriteString(fmt.Sprintf("Updated at %s: %s\n", time.Now().Format(updateLineFmt), whatDayIsIt(time.Now(), logger)))
+	if writeError != nil {
+		w.WriteString("Formatting error\n")
+		w.WriteString(writeError.Error())
+	}
 	w.WriteString(outputTasks(tasks))
 	w.WriteString(outputEvents(events))
 	logger.Info("Updated To Do List file")

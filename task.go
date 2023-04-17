@@ -60,6 +60,11 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logg
 	nowHourBlock := nextHourBlock(now)
 	logger = logger.New("NOW", nowHourBlock)
 	logger.Debug("Getting hours left for task")
+	valErr := t.validate()
+	if valErr != nil {
+		logger.Error("Task did not pass validation", "err", valErr.Error())
+		return 0, valErr
+	}
 	// try to parse Deadline into time
 	deadline, err := time.Parse(taskDateFmt, t.Deadline)
 
@@ -151,6 +156,11 @@ func (t *Task) parseRepeatingDays(logger log15.Logger) (hour int, weekRotation r
 		return
 	}
 	weekRotation = rotation(tokens[1])
+	if weekRotation != firstWeek && weekRotation != secondWeek && weekRotation != bothWeeks {
+		err = fmt.Errorf("Malformed Deadline! '%s' is not a repeating date.", t.Deadline)
+		logger.Error("Malformed deadline. This is not a repeating deadline. Perhaps missing time zone or rotation")
+		return
+	}
 	//everything else is days
 	daysStr := strings.Join(tokens[2:], " ")
 	days, err = parseDayStrings(daysStr)
@@ -158,6 +168,16 @@ func (t *Task) parseRepeatingDays(logger log15.Logger) (hour int, weekRotation r
 		logger.Error("Problem converting days portion of repeating deadline", "err", err.Error())
 	}
 	return
+}
+
+func (t *Task) validate() error {
+	if t.Name == "" {
+		return fmt.Errorf("Task is missing a name")
+	}
+	if t.Deadline == "" {
+		return fmt.Errorf("Task '%s' has no deadline", t.Name)
+	}
+	return nil
 }
 
 func sortTasks(tasks []*Task, now time.Time, genEvents []*GeneralEvent, topLogger log15.Logger) error {

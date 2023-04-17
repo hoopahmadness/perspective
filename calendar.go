@@ -116,18 +116,18 @@ func parseDayStrings(input string) ([]time.Weekday, error) {
 		if len(days) == 1 { // this is a single listed day
 			day, err := getWeekday(days[0])
 			if err != nil {
-				return dayList, err
+				return dayList, fmt.Errorf("Unable to parse '%s' as single listed day", phrase)
 			}
 			dayList = append(dayList, day)
 		} else if len(days) == 2 { // this is a range of days
 			firstDay, err := getWeekday(days[0])
 			if err != nil {
-				return dayList, err
+				return dayList, fmt.Errorf("Unable to parse first part of '%s' as range between two days", phrase)
 			}
 			dayList = append(dayList, firstDay)
 			lastDay, err := getWeekday(days[1])
 			if err != nil {
-				return dayList, err
+				return dayList, fmt.Errorf("Unable to parse second part of '%s' as range between two days", phrase)
 			}
 			if lastDay < firstDay { // temporarily "un" wrap the week
 				lastDay = lastDay + 7
