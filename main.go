@@ -34,6 +34,7 @@ var genTextMatcher *regexp.Regexp
 func main() {
 
 	logger := log15.New()
+	logger.SetHandler(log15.LvlFilterHandler(log15.LvlInfo, log15.StdoutHandler))
 
 	genTextMatcher, _ = regexp.Compile(`\t{2}- \*(.+)\*`)
 
@@ -60,7 +61,11 @@ func main() {
 			logger.Error(err.Error())
 			return
 		}
-		sortTasks(ourTasks, time.Now(), ourEvents, logger)
+		err = sortTasks(ourTasks, time.Now(), ourEvents, logger)
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
 		if compareLists(previousTasks, ourTasks, logger) {
 			writeToFile(ourEvents, ourTasks, &turnBlindEye, logger)
 			time.Sleep(1 * time.Second)

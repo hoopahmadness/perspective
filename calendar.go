@@ -51,7 +51,7 @@ func getZeroSunday(now time.Time) time.Time {
 }
 
 // an HourBlock is a simplified representation of an our of a day of a week.
-//0 is  midnight thru one AM on the morning of First Sunday
+// 0 is  midnight thru one AM on the morning of First Sunday
 // 24 is 11 PM thru midnight on First Sunday
 // 336 is 11 PM thru midnight on the Second Saturday...and so on
 // type hourBlock int
@@ -113,13 +113,13 @@ func parseDayStrings(input string) ([]time.Weekday, error) {
 	for _, phrase := range tokens {
 		phrase = strings.Trim(phrase, " ")
 		days := strings.Split(phrase, "-")
-		if len(days) == 1 { //this is a single listed day
+		if len(days) == 1 { // this is a single listed day
 			day, err := getWeekday(days[0])
 			if err != nil {
 				return dayList, err
 			}
 			dayList = append(dayList, day)
-		} else if len(days) == 2 { //this is a range of days
+		} else if len(days) == 2 { // this is a range of days
 			firstDay, err := getWeekday(days[0])
 			if err != nil {
 				return dayList, err
@@ -129,19 +129,20 @@ func parseDayStrings(input string) ([]time.Weekday, error) {
 			if err != nil {
 				return dayList, err
 			}
-			if lastDay < firstDay { //temporarily "un" wrap the week
+			if lastDay < firstDay { // temporarily "un" wrap the week
 				lastDay = lastDay + 7
 			}
-			//iterate over loop to fill in ranges
+			// iterate over loop to fill in ranges
 			for middleDay := firstDay + 1; middleDay < lastDay; middleDay++ {
-				if middleDay == time.Weekday(7) { //wrap
+				if middleDay == time.Weekday(7) { // wrap
 					middleDay = time.Weekday(0)
 					lastDay = lastDay - 7
 				}
 				dayList = append(dayList, middleDay)
 			}
 			dayList = append(dayList, lastDay)
-
+		} else {
+			return dayList, fmt.Errorf("Unable to parse out any days from the string '%s'", phrase)
 		}
 	}
 	return dayList, nil
