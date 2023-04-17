@@ -3,9 +3,12 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/inconshreveable/log15"
 )
 
 func TestMDToStructs(t *testing.T) {
+	tLogger := log15.New()
 	tests := []struct {
 		description    string
 		lines          []string
@@ -38,9 +41,13 @@ func TestMDToStructs(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		events, tasks := mdToStructs(test.lines)
+		events, tasks := mdToStructs(test.lines, tLogger)
 		for _, task := range tasks {
-			task.calculateUrgency(time.Now(), events)
+			err := task.calculateUrgency(time.Now(), events, tLogger)
+			if err != nil {
+				t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+				t.FailNow()
+			}
 			if task.Urgency == 0 {
 				t.FailNow()
 			}

@@ -137,7 +137,11 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logg
 }
 
 func (t *Task) calculateUrgency(now time.Time, genEvents []*GeneralEvent, logger log15.Logger) error {
-	hoursLeft, err := t.getHoursLeft(now, getNextBlockedHours(now, genEvents, logger), logger)
+	blockedHours, err := getNextBlockedHours(now, genEvents, logger)
+	if err != nil {
+		return err
+	}
+	hoursLeft, err := t.getHoursLeft(now, blockedHours, logger)
 	if err != nil {
 		return err
 	}

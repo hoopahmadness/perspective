@@ -29,6 +29,22 @@ type GeneralEvent struct {
 	Raw      string
 }
 
+func (ge *GeneralEvent) validate() error {
+	if ge.Name == "" {
+		return fmt.Errorf("Event is missing a name")
+	}
+	if ge.Rotation == "" {
+		return fmt.Errorf("Event '%s' has no deadline", ge.Name)
+	}
+	if ge.Days == "" {
+		return fmt.Errorf("Event '%s' has no listed days", ge.Name)
+	}
+	if ge.Duration == 0 {
+		return fmt.Errorf("Event '%s' has missing or zero duration", ge.Name)
+	}
+	return nil
+}
+
 func (e *GeneralEvent) AddRaw(line string) {
 	e.Raw += line + "\n"
 }
@@ -50,11 +66,15 @@ func (event *GeneralEvent) generateBlockedHours(logger log15.Logger) []int {
 	return generateBlockedHours(days, event.Rotation, event.StartTime, event.Duration)
 }
 
-func getNextBlockedHours(now time.Time, genEvents []*GeneralEvent, topLogger log15.Logger) []int {
+func getNextBlockedHours(now time.Time, genEvents []*GeneralEvent, topLogger log15.Logger) ([]int, error) {
 	hourblocks := []int{}
 	upcomingHour := nextHourBlock(now)
 	for _, event := range genEvents {
 		logger := topLogger.New("event", event, "function", "getNextBlockedHours", "upcomingHour", upcomingHour)
+		err := event.validate()
+		if err != nil {
+			return hourblocks, err
+		}
 		hours := event.generateBlockedHours(logger)
 		for _, hour := range hours {
 			if hour <= upcomingHour {
@@ -64,7 +84,7 @@ func getNextBlockedHours(now time.Time, genEvents []*GeneralEvent, topLogger log
 		}
 	}
 	sort.Ints([]int(hourblocks))
-	return hourblocks
+	return hourblocks, nil
 }
 
 func outputEvents(eventList []*GeneralEvent) string {

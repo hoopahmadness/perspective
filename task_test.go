@@ -3,10 +3,13 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/inconshreveable/log15"
 )
 
 // check that tasks correctly parse a deadline string with parseRepeatingDays
 func TestParseRepeatedDays(t *testing.T) {
+	tLogger := log15.New()
 	tests := []struct {
 		inputStr       string
 		resultHour     int
@@ -72,7 +75,11 @@ func TestParseRepeatedDays(t *testing.T) {
 		ourTask := &Task{
 			Deadline: test.inputStr,
 		}
-		hour, week, days := ourTask.parseRepeatingDays()
+		hour, week, days, err := ourTask.parseRepeatingDays(tLogger)
+		if err != nil {
+			t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+			t.FailNow()
+		}
 		if hour != test.resultHour {
 			t.Errorf("Got wrong hour when trying to parse deadline '%s';\nActual: %d\nExpected: %d", test.inputStr, hour, test.resultHour)
 			t.FailNow()
@@ -90,6 +97,7 @@ func TestParseRepeatedDays(t *testing.T) {
 
 // check that repeating tasks correctly return remaining hours for early, mid, and late-fortnite Nows
 func TestTasksReturnedHours(t *testing.T) {
+	tLogger := log15.New()
 	bookClub := &Task{
 		Name:           "Read For Book Club",
 		Deadline:       "18:00 both Tuesday, Thursday",
@@ -137,19 +145,31 @@ func TestTasksReturnedHours(t *testing.T) {
 	}
 	for _, test := range tests {
 		// early test
-		remainingEarly := test.task.getHoursLeft(times["early"], sleepEvent.generateBlockedHours())
+		remainingEarly, err := test.task.getHoursLeft(times["early"], sleepEvent.generateBlockedHours(tLogger), tLogger)
+		if err != nil {
+			t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+			t.FailNow()
+		}
 		if remainingEarly != test.remainingHoursEarly {
 			t.Errorf("Problem with '%s'; Remaining hours didn't match for early;\nExpected: %v\nActual: %v", test.title, test.remainingHoursEarly, remainingEarly)
 			t.FailNow()
 		}
 		// mid test
-		remainingMid := test.task.getHoursLeft(times["mid"], sleepEvent.generateBlockedHours())
+		remainingMid, err := test.task.getHoursLeft(times["mid"], sleepEvent.generateBlockedHours(tLogger), tLogger)
+		if err != nil {
+			t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+			t.FailNow()
+		}
 		if remainingMid != test.remainingHoursMid {
 			t.Errorf("Problem with '%s'; Remaining hours didn't match for mid;\nExpected: %v\nActual: %v", test.title, test.remainingHoursMid, remainingMid)
 			t.FailNow()
 		}
 		// late test
-		remainingLate := test.task.getHoursLeft(times["late"], sleepEvent.generateBlockedHours())
+		remainingLate, err := test.task.getHoursLeft(times["late"], sleepEvent.generateBlockedHours(tLogger), tLogger)
+		if err != nil {
+			t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+			t.FailNow()
+		}
 		if remainingLate != test.remainingHoursLate {
 			t.Errorf("Problem with '%s'; Remaining hours didn't match for late;\nExpected: %v\nActual: %v", test.title, test.remainingHoursLate, remainingLate)
 			t.FailNow()
@@ -158,6 +178,7 @@ func TestTasksReturnedHours(t *testing.T) {
 }
 
 func TestTaskUrgency(t *testing.T) {
+	tLogger := log15.New()
 	bookClub := &Task{
 		Name:           "book club",
 		Deadline:       "08:00 11/27/2022 EST",
@@ -166,7 +187,11 @@ func TestTaskUrgency(t *testing.T) {
 	report1, report2 := createTwoTasks()
 	taskList := []*Task{bookClub, report1, report2}
 	mid := generateTestingTimes()["mid"]
-	sortTasks(taskList, mid, []*GeneralEvent{})
+	err := sortTasks(taskList, mid, []*GeneralEvent{}, tLogger)
+	if err != nil {
+		t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+		t.FailNow()
+	}
 	if bookClub.Urgency != 2.4 {
 		t.Errorf("Expected urgency of %f, got %f\n", 2.4, bookClub.Urgency)
 	}
@@ -179,7 +204,11 @@ func TestTaskUrgency(t *testing.T) {
 	}
 
 	late := generateTestingTimes()["late"]
-	sortTasks(taskList, late, []*GeneralEvent{})
+	err = sortTasks(taskList, late, []*GeneralEvent{}, tLogger)
+	if err != nil {
+		t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+		t.FailNow()
+	}
 	if bookClub.Urgency >= 0 {
 		t.Errorf("Expected urgency of less than zero, got %f\n", bookClub.Urgency)
 	}

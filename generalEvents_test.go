@@ -3,10 +3,14 @@ package main
 import (
 	"sort"
 	"testing"
+
+	"github.com/inconshreveable/log15"
 )
 
 // test that a list of events returns the correct list of blocked off hours for early, mid, and late-fortnite Nows
+// HEY! We need to add some examples of events in the near past and far past to make sure those are calculated correctly too
 func TestGenEventBlockedHours(t *testing.T) {
+	tLogger := log15.New()
 	times := generateTestingTimes()
 	sleepEvent := &GeneralEvent{
 		Name:      "sleeping",
@@ -40,7 +44,11 @@ func TestGenEventBlockedHours(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		hours := getNextBlockedHours(times[test.testNow], []*GeneralEvent{sleepEvent})
+		hours, err := getNextBlockedHours(times[test.testNow], []*GeneralEvent{sleepEvent}, tLogger)
+		if err != nil {
+			t.Errorf("right now none of these tests expect an error so this is a fail, but in the future we should add some error testing too")
+			t.FailNow()
+		}
 		if !compareIntArr(hours, test.generatedHours) {
 			t.Errorf("Sleeping hours didn't match for %s;\nExpected: %v\nActual: %v", test.testNow, test.generatedHours, hours)
 			t.FailNow()
