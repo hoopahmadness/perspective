@@ -104,7 +104,7 @@ func TestTasksReturnedHours(t *testing.T) {
 		EstimatedHours: 1,
 	}
 	times := generateTestingTimes()
-	bookReport1, bookReport2 := createTwoTasks()
+	bookReport1, bookReport2, syllabus := createThreeTasks()
 
 	sleepEvent := &GeneralEvent{
 		Name:      "sleeping",
@@ -129,7 +129,7 @@ func TestTasksReturnedHours(t *testing.T) {
 			remainingHoursLate:  68,
 		},
 		{
-			title:               "Upcoming task generates correct hours, even when in the past",
+			title:               "Upcoming task generates correct hours, even when in the recent past",
 			task:                bookReport1,
 			remainingHoursEarly: 136,
 			remainingHoursMid:   26,
@@ -141,6 +141,13 @@ func TestTasksReturnedHours(t *testing.T) {
 			remainingHoursEarly: 616,
 			remainingHoursMid:   506,
 			remainingHoursLate:  419,
+		},
+		{
+			title:               "Task far back in the past should keep iterating into the negatives instead of ending up positive again",
+			task:                syllabus,
+			remainingHoursEarly: -928,
+			remainingHoursMid:   -1086,
+			remainingHoursLate:  -1221,
 		},
 	}
 	for _, test := range tests {
@@ -184,8 +191,8 @@ func TestTaskUrgency(t *testing.T) {
 		Deadline:       "08:00 11/27/2022 EST",
 		EstimatedHours: 24,
 	}
-	report1, report2 := createTwoTasks()
-	taskList := []*Task{bookClub, report1, report2}
+	report1, report2, syllabus := createThreeTasks()
+	taskList := []*Task{bookClub, report1, report2, syllabus}
 	mid := generateTestingTimes()["mid"]
 	err := sortTasks(taskList, mid, []*GeneralEvent{}, tLogger)
 	if err != nil {
@@ -196,11 +203,12 @@ func TestTaskUrgency(t *testing.T) {
 		t.Errorf("Expected urgency of %f, got %f\n", 2.4, bookClub.Urgency)
 	}
 	// test sorted order
-	if taskList[0] != bookClub || taskList[1] != report1 || taskList[2] != report2 {
-		t.Errorf("Task list out of order for mid time:\n%v: %f\n%v: %f\n%v: %f\n",
+	if taskList[0] != bookClub || taskList[1] != report1 || taskList[2] != report2 || taskList[3] != syllabus {
+		t.Errorf("Task list out of order for mid time:\n%v: %f\n%v: %f\n%v: %f\n%v: %f\n",
 			taskList[0].Name, taskList[0].Urgency,
 			taskList[1].Name, taskList[1].Urgency,
-			taskList[2].Name, taskList[2].Urgency)
+			taskList[2].Name, taskList[2].Urgency,
+			taskList[3].Name, taskList[3].Urgency)
 	}
 
 	late := generateTestingTimes()["late"]
@@ -214,15 +222,21 @@ func TestTaskUrgency(t *testing.T) {
 	}
 
 	// test sorted order
-	if taskList[0] != report2 || taskList[1] != report1 || taskList[2] != bookClub {
-		t.Errorf("Task list out of order for late time:\n%v: %f\n%v: %f\n%v: %f\n",
+	if taskList[0] != report2 || taskList[1] != syllabus || taskList[2] != report1 || taskList[3] != bookClub {
+		t.Errorf("Task list out of order for late time:\n%v: %f\n%v: %f\n%v: %f\n%v: %f\n",
 			taskList[0].Name, taskList[0].Urgency,
 			taskList[1].Name, taskList[1].Urgency,
-			taskList[2].Name, taskList[2].Urgency)
+			taskList[2].Name, taskList[2].Urgency,
+			taskList[3].Name, taskList[3].Urgency)
 	}
 }
 
-func createTwoTasks() (*Task, *Task) {
+func createThreeTasks() (*Task, *Task, *Task) {
+	earlySyllabus := &Task{
+		Name:           "Read the syllabus and get it signed",
+		Deadline:       "16:00 09/28/2022 EST",
+		EstimatedHours: 1,
+	}
 	bookReport1 := &Task{
 		Name:           "Finish first book report for class",
 		Deadline:       "16:00 11/28/2022 EST",
@@ -233,7 +247,7 @@ func createTwoTasks() (*Task, *Task) {
 		Deadline:       "16:00 12/28/2022 EST",
 		EstimatedHours: 1,
 	}
-	return bookReport1, bookReport2
+	return bookReport1, bookReport2, earlySyllabus
 }
 
 func compareWeekdayArr(arr1, arr2 []time.Weekday) bool {

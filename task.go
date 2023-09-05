@@ -43,6 +43,11 @@ func (t *Task) PrintRaw() string {
 		return ""
 	}
 	out := t.Raw
+	if out == "" {
+		out += fmt.Sprintf("Name; %s ", t.Name)
+		out += fmt.Sprintf("Deadline; %s ", t.Deadline)
+		out += fmt.Sprintf("Estimated hours; %d ", t.EstimatedHours)
+	}
 	// add in generated text: urgency, hours remaining, hours blocked
 	out += fmt.Sprintf(genTextFmt, fmt.Sprintf("Urgency; %.2f%%", t.Urgency*100))
 	out += fmt.Sprintf(genTextFmt, fmt.Sprintf("Free Time Left; %d", t.RemainingHours))
@@ -57,7 +62,7 @@ func (t *Task) String() string {
 func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logger) (int, error) {
 	deadlineHourBlock := 0
 	interveningFortnites := 0
-	nowHourBlock := nextHourBlock(now)
+	nowHourBlock := nextHourBlock(now, logger)
 	logger = logger.New("NOW", nowHourBlock)
 	logger.Debug("Getting hours left for task")
 	valErr := t.validate()
@@ -80,7 +85,19 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logg
 			interveningFortnites++
 			deadline = earlyDeadline
 		}
-		deadlineHourBlock = nextHourBlock(deadline)
+		if interveningFortnites == 0 {
+			for {
+				// there is a chance that the deadline is actually really far back in the past so we need to do the opposite operation to pin it down
+				laterDeadline := deadline.Add(time.Hour * fullTwoWeeks)
+				if getZeroSunday(now).Before(laterDeadline) {
+					logger.Debug("We added enough fortnites", "added", interveningFortnites, "newDeadline", deadline)
+					break
+				}
+				interveningFortnites--
+				deadline = laterDeadline
+			}
+		}
+		deadlineHourBlock = nextHourBlock(deadline, logger)
 	} else { // this is a repeating task, (or actual error) we need to find the next instance of this deadline
 		logger = logger.New("task mode", "repeating")
 		logger.Debug("This is a repeating task", "repeatingDays", t.Deadline)
@@ -105,15 +122,15 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logg
 		}
 	}
 	// now we have a deadline hour block but it's normalized to this rotation; let's un-normalize it
-	logger.Debug("Deadline hour calculated", "hour", deadlineHourBlock)
+	logger.Debug("Deadline hour calculated", "normalizedDeadline", deadlineHourBlock)
 	deadlineHourBlock += interveningFortnites * fullTwoWeeks
 
 	remainingFreeHours := deadlineHourBlock - nowHourBlock
 
 	wraps := 0
-	logger = logger.New("freeHours", &remainingFreeHours)
-	logger.Debug("Ticking off remaining free hours")
+	logger.Debug("Ticking off remaining free hours", "freeHours", remainingFreeHours)
 	for index := 0; ; index++ {
+		// loopLogger := logger.New("freeHours", remainingFreeHours)
 		if index == len(blockedHours) {
 			if index == 0 {
 				break
@@ -130,7 +147,7 @@ func (t *Task) getHoursLeft(now time.Time, blockedHours []int, logger log15.Logg
 		}
 		remainingFreeHours += -1
 		t.BusyHours += 1
-		// logger.Debug(fmt.Sprintf("Hour %d (%d) is blocked, remainingFreeHours is %d \n", blockedHours[index], eventHourBlock, remainingFreeHours))
+		// loopLogger.Debug(fmt.Sprintf("Hour %d (%d) is blocked, remainingFreeHours is %d \n", blockedHours[index], eventHourBlock, remainingFreeHours))
 	}
 	t.RemainingHours = remainingFreeHours
 	return remainingFreeHours, nil

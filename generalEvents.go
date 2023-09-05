@@ -68,7 +68,7 @@ func (event *GeneralEvent) generateBlockedHours(logger log15.Logger) []int {
 
 func getNextBlockedHours(now time.Time, genEvents []*GeneralEvent, topLogger log15.Logger) ([]int, error) {
 	hourblocks := []int{}
-	upcomingHour := nextHourBlock(now)
+	upcomingHour := nextHourBlock(now, topLogger)
 	for _, event := range genEvents {
 		logger := topLogger.New("event", event, "function", "getNextBlockedHours", "upcomingHour", upcomingHour)
 		err := event.validate()

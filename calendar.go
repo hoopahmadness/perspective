@@ -11,35 +11,26 @@ import (
 
 // Off Sunday 09/11 2022 No DST
 // Or Sunday 11/20 2022 DST
-var primeSunday = getPrimeSunday()
 var primeDateFmt = "Mon 01/02 2006 MST"
-var taskDateFmt = "15:00 01/02/2006 MST"
+var specificDateTimeFmt = "Mon 15:04 01/02/2006 MST"
+var taskDateFmt = "15:04 01/02/2006 MST"
 var updateLineFmt = "15:04 01/02/2006 MST"
 
 // function used to set the global variable PrimeSunday, which is one of two literature values used to define
 // which sundays are prime (as opposed to being second sundays)
-func getPrimeSunday() time.Time {
+func getPrimeSunday(timezone string) time.Time {
 	logger := log15.New("function", "getPrimeSunday")
-	zone, _ := time.Now().Zone()
-	primeSundayNoDST, err := time.Parse(primeDateFmt, "Sun 09/11 2022 "+zone)
+	primeSunday, err := time.Parse(primeDateFmt, "Sun 09/11 2022 "+timezone)
 	if err != nil {
 		logger.Error("Unable to parse Prime Sunday No DST String", "err", err.Error())
 	}
-	NoDSTZone, _ := primeSundayNoDST.Zone()
-	primeSundayDST, err := time.Parse(primeDateFmt, "Sun 11/20 2022 "+zone)
-	if err != nil {
-		logger.Error("Unable to parse Prime Sunday DST String", "err", err.Error())
-	}
-	if NoDSTZone == zone {
-		return primeSundayNoDST
-	} else {
-		return primeSundayDST
-	}
+	return primeSunday
 }
 
 // function used to calculate the First Sunday corresponding to a given time.Time
 func getZeroSunday(now time.Time) time.Time {
-	zeroSunday := primeSunday
+	zone, _ := now.Zone()
+	zeroSunday := getPrimeSunday(zone)
 	for {
 		nextZero := zeroSunday.Add(fullTwoWeeks * time.Hour)
 		if nextZero.After(now) {
@@ -67,9 +58,11 @@ const (
 )
 
 // function that takes a time and spits out the number of the upcoming hour block
-func nextHourBlock(now time.Time) int {
+func nextHourBlock(now time.Time, logger log15.Logger) int {
+	zone, _ := now.Zone()
+	logger.Debug("The 'now' time is", "time", now.Format(specificDateTimeFmt), "rawTime.Time", now)
 	nowHour := now.Add(30 * time.Minute).Round(time.Hour) // round up to the next hour
-	primeDiff := nowHour.Sub(primeSunday)                 // should be a whole number of hours
+	primeDiff := nowHour.Sub(getPrimeSunday(zone))        // should be a whole number of hours
 	primeDiffHours := int(primeDiff / time.Hour)
 
 	return primeDiffHours % fullTwoWeeks
@@ -78,7 +71,7 @@ func nextHourBlock(now time.Time) int {
 // function that takes a time and generates a string representation of what day and rotation
 // that time corresponds to.
 func whatDayIsIt(now time.Time, logger log15.Logger) string {
-	hourBlock := nextHourBlock(now)
+	hourBlock := nextHourBlock(now, logger)
 	rotation := "first"
 	weekday := ""
 	if hourBlock >= 168 {
